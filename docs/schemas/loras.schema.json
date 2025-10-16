@@ -1,0 +1,395 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Haalt/sdml-generator/schemas/loras.schema.json",
+  "title": "LoRA Configuration Schema",
+  "description": "Schema for LoRA definitions JSON files used by sdml-generator",
+  "type": "object",
+  "properties": {
+    "instances": {
+      "description": "Array of LoRA instance definitions",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique identifier for this LoRA instance"
+          },
+          "class": {
+            "type": "string",
+            "enum": [
+              "MainLora",
+              "SecondaryLora",
+              "TagLora",
+              "ConditionalVariantLora"
+            ],
+            "description": "LoRA class type determining behavior and usage"
+          },
+          "disabled": {
+            "type": "boolean",
+            "description": "Whether this LoRA instance is disabled",
+            "default": false
+          },
+          "fields": {
+            "type": "object",
+            "description": "LoRA-specific configuration fields",
+            "properties": {
+              "lora_tag": {
+                "type": "string",
+                "description": "The LoRA identifier tag (e.g., 'anime_style_v1')"
+              },
+              "prefix_tag": {
+                "type": "string",
+                "description": "Prefix for the LoRA tag in prompts",
+                "default": "lora"
+              },
+              "min_weight": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 2.0,
+                "description": "Minimum weight value for this LoRA",
+                "default": 1.0
+              },
+              "max_weight": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 2.0,
+                "description": "Maximum weight value for this LoRA",
+                "default": 1.0
+              },
+              "const_tags": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "list"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "items"
+                ],
+                "additionalProperties": false,
+                "description": "Constant tags always included with this LoRA (list node)"
+              },
+              "const_variations": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "list"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "items"
+                ],
+                "additionalProperties": false,
+                "description": "Constant variations for this LoRA (list node)"
+              },
+              "const_banned_key_tags": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "list"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "items"
+                ],
+                "additionalProperties": false,
+                "description": "Tags that prevent this LoRA from being used (list node)"
+              }
+            },
+            "required": [
+              "lora_tag",
+              "const_tags",
+              "const_variations",
+              "const_banned_key_tags"
+            ],
+            "additionalProperties": false
+          },
+          "extra_ban_categories": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "list"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "type",
+              "items"
+            ],
+            "additionalProperties": false,
+            "description": "Additional banned categories (ConditionalVariantLora only)"
+          },
+          "reroll_tags": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "choice",
+                        "choices",
+                        "list"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "list"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "choice",
+                            "choices",
+                            "list"
+                          ]
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "items"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "items"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "description": "Reroll configuration for tags (array or list wrapper)"
+          },
+          "reroll_variations": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "choice",
+                        "choices",
+                        "list"
+                      ]
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "const": "list"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "choice",
+                            "choices",
+                            "list"
+                          ]
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "items"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "type",
+                  "items"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "description": "Reroll configuration for variations (array or list wrapper)"
+          }
+        },
+        "required": [
+          "name",
+          "class",
+          "fields"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "tag_lora_map": {
+      "description": "Mapping from tag strings to TagLora instance names",
+      "type": "object",
+      "patternProperties": {
+        ".*": {
+          "type": "string",
+          "description": "Name of a TagLora instance"
+        }
+      },
+      "additionalProperties": false
+    },
+    "compatibility_map": {
+      "description": "LoRA compatibility matrix defining which LoRAs work together",
+      "type": "object",
+      "patternProperties": {
+        ".*": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Name of compatible LoRA instance"
+          },
+          "description": "List of LoRA names compatible with this LoRA"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "instances"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "instances": [
+        {
+          "name": "anime_style_v1",
+          "class": "MainLora",
+          "fields": {
+            "lora_tag": "anime_style_v1",
+            "min_weight": 0.6,
+            "max_weight": 1.0,
+            "const_tags": {
+              "type": "list",
+              "items": [
+                "anime",
+                "cel shading"
+              ]
+            },
+            "const_variations": {
+              "type": "list",
+              "items": [
+                "vibrant colors",
+                "sharp lines"
+              ]
+            },
+            "const_banned_key_tags": {
+              "type": "list",
+              "items": []
+            }
+          }
+        },
+        {
+          "name": "character_lora_v2",
+          "class": "SecondaryLora",
+          "fields": {
+            "lora_tag": "character_lora_v2",
+            "min_weight": 0.4,
+            "max_weight": 0.8,
+            "const_tags": {
+              "type": "list",
+              "items": [
+                "detailed character"
+              ]
+            },
+            "const_variations": {
+              "type": "list",
+              "items": []
+            },
+            "const_banned_key_tags": {
+              "type": "list",
+              "items": [
+                "abstract"
+              ]
+            }
+          }
+        }
+      ],
+      "compatibility_map": {
+        "anime_style_v1": [
+          "character_lora_v2"
+        ],
+        "character_lora_v2": [
+          "anime_style_v1"
+        ]
+      }
+    }
+  ]
+}

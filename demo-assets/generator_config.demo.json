@@ -1,0 +1,28 @@
+{
+  "samplers": [
+    "Euler a",
+    "DPM++ 2M Karras",
+    "DPM++ SDE Karras",
+    "DDIM"
+  ],
+  "upscalers": [
+    "None",
+    "Latent",
+    "R-ESRGAN 4x+",
+    "R-ESRGAN 4x+ Anime6B"
+  ],
+  "width": 512,
+  "height": 768,
+  "n_iter": 4,
+  "batch_size": 1,
+  "hr_scale": 2,
+  "positive_prompt": "masterpiece, best quality",
+  "negative_prompt": "worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, fewer digits, blurry, cropped, watermark",
+  "vanilla_extra_tags": [
+    "highly detailed",
+    "ultra detailed",
+    "sharp focus",
+    "professional",
+    "trending on artstation"
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "tags": {
+    "subject": {
+      "character": [
+        "1girl",
+        "1boy",
+        "multiple girls",
+        "multiple boys"
+      ],
+      "creature": [
+        "dragon",
+        "cat",
+        "wolf"
+      ]
+    },
+    "composition": {
+      "framing": [
+        "portrait",
+        "close-up",
+        "full body",
+        "upper body",
+        "cowboy shot"
+      ],
+      "angle": [
+        "from above",
+        "from below",
+        "from side",
+        "dutch angle"
+      ]
+    },
+    "style": {
+      "render": [
+        "anime",
+        "photorealistic",
+        "watercolor",
+        "oil painting",
+        "sketch"
+      ],
+      "quality": [
+        "masterpiece",
+        "best quality",
+        "high resolution",
+        "8k",
+        "detailed"
+      ]
+    },
+    "environment": {
+      "location": [
+        "outdoor",
+        "indoor",
+        "forest",
+        "city",
+        "beach",
+        "mountains"
+      ],
+      "time": [
+        "day",
+        "night",
+        "sunset",
+        "sunrise"
+      ],
+      "weather": [
+        "sunny",
+        "cloudy",
+        "rain",
+        "snow"
+      ]
+    },
+    "lighting": [
+      "dramatic lighting",
+      "soft lighting",
+      "rim lighting",
+      "volumetric lighting",
+      "backlight"
+    ],
+    "colors": [
+      "vibrant colors",
+      "muted colors",
+      "warm colors",
+      "cool colors",
+      "monochrome"
+    ],
+    "photography": [
+      "depth of field",
+      "bokeh",
+      "motion blur",
+      "long exposure",
+      "macro photography"
+    ],
+    "landscape": [
+      "mountain",
+      "ocean",
+      "desert",
+      "field",
+      "urban landscape"
+    ],
+    "simple_background": [
+      "white background",
+      "black background",
+      "gradient background",
+      "solid color background"
+    ],
+    "minimal": [
+      "minimalist",
+      "simple",
+      "clean"
+    ],
+    "abstract": [
+      "abstract",
+      "surreal",
+      "geometric"
+    ],
+    "realistic": [
+      "realistic",
+      "photorealistic",
+      "hyperrealistic"
+    ]
+  },
+  "rules": {
+    "unique_categories": [
+      "subject.character",
+      "composition.framing"
+    ],
+    "exclusive_groups": {
+      "render_style": [
+        [
+          "style.render"
+        ],
+        [
+          "photography"
+        ]
+      ],
+      "background_type": [
+        [
+          "simple_background"
+        ],
+        [
+          "environment.location",
+          "landscape"
+        ]
+      ]
+    },
+    "incompatible_categories": {
+      "anime": [
+        "photorealistic",
+        "hyperrealistic"
+      ],
+      "photorealistic": [
+        "anime",
+        "watercolor",
+        "oil painting",
+        "sketch"
+      ],
+      "outdoor": [
+        "indoor"
+      ],
+      "day": [
+        "night"
+      ],
+      "portrait": [
+        "full body"
+      ],
+      "simple_background": [
+        "detailed background"
+      ]
+    }
+  }
+}

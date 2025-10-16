@@ -1,0 +1,213 @@
+{
+  "instances": [
+    {
+      "name": "anime_style_main",
+      "class": "MainLora",
+      "disabled": false,
+      "fields": {
+        "lora_tag": "anime_style_v2",
+        "prefix_tag": "lora",
+        "min_weight": 0.7,
+        "max_weight": 1.0,
+        "const_tags": {
+          "type": "list",
+          "items": [
+            "anime style",
+            "colorful"
+          ]
+        },
+        "const_variations": {
+          "type": "list",
+          "items": [
+            "vibrant colors",
+            "soft lighting",
+            "detailed background"
+          ]
+        },
+        "const_banned_key_tags": {
+          "type": "list",
+          "items": [
+            "photography"
+          ]
+        }
+      },
+      "reroll_tags": [
+        {
+          "type": "choice",
+          "items": [
+            "cel shaded",
+            "hand drawn"
+          ]
+        }
+      ],
+      "reroll_variations": [
+        {
+          "type": "choices",
+          "items": [
+            "dynamic pose",
+            "dramatic lighting",
+            "cinematic composition"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "detail_enhancer",
+      "class": "SecondaryLora",
+      "disabled": false,
+      "fields": {
+        "lora_tag": "detail_enhancer_v3",
+        "prefix_tag": "lora",
+        "min_weight": 0.4,
+        "max_weight": 0.8,
+        "const_tags": {
+          "type": "list",
+          "items": [
+            "highly detailed",
+            "intricate details"
+          ]
+        },
+        "const_variations": {
+          "type": "list",
+          "items": [
+            "sharp focus",
+            "fine details"
+          ]
+        },
+        "const_banned_key_tags": {
+          "type": "list",
+          "items": []
+        }
+      },
+      "reroll_tags": [
+        {
+          "type": "list",
+          "items": [
+            "masterpiece",
+            "best quality"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "portrait_lora",
+      "class": "TagLora",
+      "disabled": false,
+      "fields": {
+        "lora_tag": "portrait_specialist_v1",
+        "prefix_tag": "lora",
+        "min_weight": 0.5,
+        "max_weight": 0.9,
+        "const_tags": {
+          "type": "list",
+          "items": [
+            "portrait",
+            "face focus"
+          ]
+        },
+        "const_variations": {
+          "type": "list",
+          "items": [
+            "detailed face",
+            "expressive eyes"
+          ]
+        },
+        "const_banned_key_tags": {
+          "type": "list",
+          "items": [
+            "landscape",
+            "scenery"
+          ]
+        }
+      }
+    },
+    {
+      "name": "environment_variant",
+      "class": "ConditionalVariantLora",
+      "disabled": false,
+      "fields": {
+        "lora_tag": "environment_pack_v2",
+        "prefix_tag": "lora",
+        "min_weight": 0.6,
+        "max_weight": 1.0,
+        "const_tags": {
+          "type": "list",
+          "items": [
+            "detailed background"
+          ]
+        },
+        "const_variations": {
+          "type": "list",
+          "items": [
+            "outdoor",
+            "indoor",
+            "fantasy landscape"
+          ]
+        },
+        "const_banned_key_tags": {
+          "type": "list",
+          "items": [
+            "simple_background"
+          ]
+        }
+      },
+      "extra_ban_categories": {
+        "type": "list",
+        "items": [
+          "minimal",
+          "abstract"
+        ]
+      },
+      "reroll_variations": [
+        {
+          "type": "choice",
+          "items": [
+            "outdoor",
+            "indoor"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chibi_style",
+      "class": "MainLora",
+      "disabled": true,
+      "fields": {
+        "lora_tag": "chibi_style_v1",
+        "prefix_tag": "lyco",
+        "min_weight": 0.8,
+        "max_weight": 1.0,
+        "const_tags": {
+          "type": "list",
+          "items": [
+            "chibi",
+            "cute"
+          ]
+        },
+        "const_variations": {
+          "type": "list",
+          "items": []
+        },
+        "const_banned_key_tags": {
+          "type": "list",
+          "items": [
+            "realistic"
+          ]
+        }
+      }
+    }
+  ],
+  "tag_lora_map": {
+    "portrait": "portrait_lora",
+    "close-up": "portrait_lora"
+  },
+  "compatibility_map": {
+    "anime_style_main": [
+      "detail_enhancer",
+      "environment_variant"
+    ],
+    "portrait_lora": [
+      "detail_enhancer"
+    ]
+  }
+}

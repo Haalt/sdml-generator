@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Haalt/sdml-generator/schemas/generator_config.schema.json",
+  "title": "Generator Configuration Schema",
+  "description": "Schema for generator configuration JSON files used by sdml-generator",
+  "type": "object",
+  "properties": {
+    "samplers": {
+      "description": "List of available sampling methods",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Sampler name (e.g., 'Euler a', 'DPM++ 2M Karras')"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "upscalers": {
+      "description": "List of available upscaling methods",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Upscaler name (e.g., 'R-ESRGAN 4x+', 'None')"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "default": [
+        "None"
+      ]
+    },
+    "width": {
+      "description": "Default image width in pixels",
+      "type": "integer",
+      "minimum": 64,
+      "maximum": 2048,
+      "multipleOf": 8,
+      "default": 512
+    },
+    "height": {
+      "description": "Default image height in pixels",
+      "type": "integer",
+      "minimum": 64,
+      "maximum": 2048,
+      "multipleOf": 8,
+      "default": 512
+    },
+    "n_iter": {
+      "description": "Number of iterations/images to generate",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 8
+    },
+    "batch_size": {
+      "description": "Batch size for generation",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16,
+      "default": 1
+    },
+    "hr_scale": {
+      "description": "High-resolution scale factor",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4,
+      "default": 2
+    },
+    "positive_prompt": {
+      "description": "Base positive prompt text prepended to all generated prompts",
+      "type": "string",
+      "default": ""
+    },
+    "negative_prompt": {
+      "description": "Base negative prompt text used for all generated prompts",
+      "type": "string",
+      "default": ""
+    },
+    "vanilla_extra_tags": {
+      "description": "Extra tags to randomly add to vanilla prompts (no LoRAs)",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Tag to add to vanilla prompts"
+      },
+      "uniqueItems": true,
+      "default": []
+    }
+  },
+  "required": [
+    "samplers"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "samplers": [
+        "Euler a",
+        "DPM++ 2M Karras",
+        "DPM++ SDE Karras",
+        "DDIM"
+      ],
+      "upscalers": [
+        "R-ESRGAN 4x+",
+        "R-ESRGAN 4x+ Anime6B",
+        "None"
+      ],
+      "width": 512,
+      "height": 512,
+      "n_iter": 8,
+      "batch_size": 1,
+      "hr_scale": 2,
+      "positive_prompt": "masterpiece, best quality, high resolution",
+      "negative_prompt": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
+      "vanilla_extra_tags": [
+        "highly detailed",
+        "ultra detailed",
+        "sharp focus"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Haalt/sdml-generator/schemas/dict.schema.json",
+  "title": "Tag Dictionary Schema",
+  "description": "Schema for tag dictionary JSON files used by sdml-generator",
+  "type": "object",
+  "properties": {
+    "tags": {
+      "description": "Hierarchical tag structure defining categories and subcategories",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+          "oneOf": [
+            {
+              "type": "array",
+              "description": "Array of tag strings",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            },
+            {
+              "type": "object",
+              "description": "Nested category with subcategories",
+              "patternProperties": {
+                "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+                  "$ref": "#/properties/tags/patternProperties/^[a-zA-Z_][a-zA-Z0-9_]*$"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "description": "Tag selection and compatibility rules",
+      "type": "object",
+      "properties": {
+        "unique_categories": {
+          "description": "Categories where only one tag can be selected at a time",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Category path (e.g., 'characters' or 'style.anime')"
+          },
+          "uniqueItems": true
+        },
+        "exclusive_groups": {
+          "description": "Named groups of category arrays that are mutually exclusive",
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+              "type": "array",
+              "description": "Array of category group arrays - only one group can be active at a time",
+              "items": {
+                "type": "array",
+                "description": "Array of category paths that form a group",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "minItems": 2,
+              "uniqueItems": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "incompatible_categories": {
+          "description": "Per-category incompatibility mapping",
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+              "type": "array",
+              "description": "List of categories incompatible with this category",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "tags"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "tags": {
+        "characters": [
+          "1girl",
+          "1boy",
+          "cat ears",
+          "fox tail"
+        ],
+        "styles": {
+          "anime": [
+            "anime",
+            "manga style",
+            "cel shading"
+          ],
+          "realistic": [
+            "photorealistic",
+            "hyperrealistic",
+            "detailed"
+          ]
+        },
+        "lighting": [
+          "soft lighting",
+          "dramatic shadows",
+          "golden hour"
+        ]
+      },
+      "rules": {
+        "unique_categories": [
+          "characters"
+        ],
+        "exclusive_groups": {
+          "style_group": [
+            [
+              "styles.anime",
+              "styles.manga"
+            ],
+            [
+              "styles.realistic",
+              "styles.photorealistic"
+            ]
+          ]
+        },
+        "incompatible_categories": {
+          "styles.anime": [
+            "styles.realistic"
+          ]
+        }
+      }
+    }
+  ]
+}
