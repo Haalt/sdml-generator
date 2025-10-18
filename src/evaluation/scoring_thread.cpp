@@ -224,7 +224,8 @@ namespace generator
             {
                 size_t idx = i * MAX_SEQUENCE_LENGTH + j;
                 promptBatch.token_indices[idx] = prompt->tokens[j];
-                promptBatch.token_mask[idx] = 1.0f; // set mask to 1 for valid tokens
+                // set mask to 1 for valid tokens
+                promptBatch.token_mask[idx] = prompt->tokens[j] > 0 ? 1.0f : 0.0f;
             }
 
             promptBatch.cfg_scales[i] = prompt->cfgScale / MAX_CFG_SCALE;                                    // normalize CFG scale
