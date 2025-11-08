@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <fstream>
+#include <random>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -65,11 +67,9 @@ namespace
             return {};
         }
 
-        std::random_device rd;
-        std::mt19937 gen(rd());
-
-        std::uniform_int_distribution<> dis(1, arr.size());
-        int x = dis(gen);
+        static thread_local std::mt19937 gen(std::random_device{}());
+        std::uniform_int_distribution<size_t> disCount(1, arr.size());
+        size_t x = disCount(gen);
 
         std::vector<T> result;
         result.reserve(x);
