@@ -8,6 +8,22 @@
 
 // local helpers
 static std::shared_ptr<Node> json_to_node(const nlohmann::json &json);
+static std::shared_ptr<Node> json_to_node_int(const nlohmann::json &json);
+
+static const char *KEY_UNIQUE_CATEGORIES = "unique_categories";
+static const char *KEY_FILTER_CATEGORIES = "filter_categories";
+static const char *KEY_EXCLUSIVE_GROUPS = "exclusive_groups";
+static const char *KEY_INCOMPATIBLE_CATEGORIES = "incompatible_categories";
+
+static void parse_string_array(const nlohmann::json &json_array, std::vector<std::string> &out)
+{
+    out.clear();
+    for (const auto &item : json_array)
+    {
+        if (item.is_string())
+            out.push_back(item.get<std::string>());
+    }
+}
 
 static bool parse_rules(const nlohmann::json &json_rules, Rules &out_rules)
 {
@@ -15,21 +31,23 @@ static bool parse_rules(const nlohmann::json &json_rules, Rules &out_rules)
         return false;
 
     // unique_categories
-    if (json_rules.contains("unique_categories") && json_rules["unique_categories"].is_array())
+    if (json_rules.contains(KEY_UNIQUE_CATEGORIES) && json_rules[KEY_UNIQUE_CATEGORIES].is_array())
     {
-        out_rules.unique_categories.clear();
-        for (const auto &item : json_rules["unique_categories"])
-        {
-            if (item.is_string())
-                out_rules.unique_categories.push_back(item.get<std::string>());
-        }
+        parse_string_array(json_rules[KEY_UNIQUE_CATEGORIES], out_rules.unique_categories);
+    }
+
+    // filter_categories
+    if (json_rules.contains(KEY_FILTER_CATEGORIES) && json_rules[KEY_FILTER_CATEGORIES].is_array())
+    {
+        out_rules.has_filter_categories = true;
+        parse_string_array(json_rules[KEY_FILTER_CATEGORIES], out_rules.filter_categories);
     }
 
     // exclusive_groups: object of string -> array of arrays
-    if (json_rules.contains("exclusive_groups") && json_rules["exclusive_groups"].is_object())
+    if (json_rules.contains(KEY_EXCLUSIVE_GROUPS) && json_rules[KEY_EXCLUSIVE_GROUPS].is_object())
     {
         out_rules.exclusive_groups.clear();
-        for (auto it = json_rules["exclusive_groups"].begin(); it != json_rules["exclusive_groups"].end(); ++it)
+        for (auto it = json_rules[KEY_EXCLUSIVE_GROUPS].begin(); it != json_rules[KEY_EXCLUSIVE_GROUPS].end(); ++it)
         {
             const auto &group_arrays = it.value();
             if (!group_arrays.is_array())
@@ -56,10 +74,10 @@ static bool parse_rules(const nlohmann::json &json_rules, Rules &out_rules)
     }
 
     // incompatible_categories: object of category -> array of categories
-    if (json_rules.contains("incompatible_categories") && json_rules["incompatible_categories"].is_object())
+    if (json_rules.contains(KEY_INCOMPATIBLE_CATEGORIES) && json_rules[KEY_INCOMPATIBLE_CATEGORIES].is_object())
     {
         out_rules.incompatible_categories.clear();
-        for (auto it = json_rules["incompatible_categories"].begin(); it != json_rules["incompatible_categories"].end(); ++it)
+        for (auto it = json_rules[KEY_INCOMPATIBLE_CATEGORIES].begin(); it != json_rules[KEY_INCOMPATIBLE_CATEGORIES].end(); ++it)
         {
             const auto &arr = it.value();
             if (!arr.is_array())
@@ -72,7 +90,7 @@ static bool parse_rules(const nlohmann::json &json_rules, Rules &out_rules)
         }
     }
 
-    return !out_rules.unique_categories.empty() || !out_rules.exclusive_groups.empty() || !out_rules.incompatible_categories.empty();
+    return !out_rules.unique_categories.empty() || out_rules.has_filter_categories || !out_rules.exclusive_groups.empty() || !out_rules.incompatible_categories.empty();
 }
 
 static CategoryRegistry build_registry_from_rules(const Rules &rules)
@@ -80,6 +98,7 @@ static CategoryRegistry build_registry_from_rules(const Rules &rules)
     CategoryRegistry reg;
 
     std::set<std::string> all_categories(rules.unique_categories.begin(), rules.unique_categories.end());
+    all_categories.insert(rules.filter_categories.begin(), rules.filter_categories.end());
     for (const auto &kv : rules.exclusive_groups)
     {
         for (const auto &category_array : kv.second)
@@ -223,6 +242,63 @@ std::shared_ptr<Tag_dict> create_tag_dict(const std::string &json_path)
     }
 }
 
+std::shared_ptr<Tag_dict> create_tag_dict_int(const std::string &json_path)
+{
+    try
+    {
+        if (!std::filesystem::exists(json_path))
+        {
+            std::cerr << "JSON file does not exist: " << json_path << std::endl;
+            return nullptr;
+        }
+
+        std::ifstream file(json_path);
+        if (!file.is_open())
+        {
+            std::cerr << "Failed to open JSON file: " << json_path << std::endl;
+            return nullptr;
+        }
+
+        nlohmann::json json_data;
+        file >> json_data;
+
+        nlohmann::json tags_json;
+        if (json_data.is_object() && json_data.contains("tags"))
+        {
+            tags_json = json_data["tags"];
+        }
+        else
+        {
+            tags_json = json_data;
+        }
+
+        std::shared_ptr<Node> root = json_to_node_int(tags_json);
+        if (!root)
+        {
+            std::cerr << "Failed to parse tags from JSON (int mode)" << std::endl;
+            return nullptr;
+        }
+
+        Rules rules;
+        if (json_data.is_object() && json_data.contains("rules"))
+        {
+            if (!parse_rules(json_data["rules"], rules))
+            {
+                throw std::runtime_error("Invalid dictionnary rules");
+            }
+        }
+
+        CategoryRegistry registry = build_registry_from_rules(rules);
+
+        return std::make_shared<Tag_dict>(root, std::move(rules), std::move(registry));
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Error creating tag dict from JSON (int mode): " << e.what() << std::endl;
+        return nullptr;
+    }
+}
+
 // helper to convert JSON to Node structures
 static std::shared_ptr<Node> json_to_node(const nlohmann::json &json)
 {
@@ -253,5 +329,36 @@ static std::shared_ptr<Node> json_to_node(const nlohmann::json &json)
     }
 
     // fallback
+    return nullptr;
+}
+
+static std::shared_ptr<Node> json_to_node_int(const nlohmann::json &json)
+{
+    if (json.is_number_integer())
+    {
+        return std::make_shared<StringNode>(std::to_string(json.get<int64_t>()));
+    }
+    else if (json.is_array())
+    {
+        std::vector<std::string> values;
+        for (const auto &item : json)
+        {
+            if (item.is_number_integer())
+            {
+                values.push_back(std::to_string(item.get<int64_t>()));
+            }
+        }
+        return std::make_shared<ListNode>(values);
+    }
+    else if (json.is_object())
+    {
+        std::map<std::string, std::shared_ptr<Node>> children;
+        for (auto it = json.begin(); it != json.end(); ++it)
+        {
+            children[it.key()] = json_to_node_int(it.value());
+        }
+        return std::make_shared<MapNode>(children);
+    }
+
     return nullptr;
 }
