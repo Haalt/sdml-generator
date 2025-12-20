@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -8,6 +9,7 @@
 #include <memory>
 #include <onnxruntime_cxx_api.h>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "utils/types.hpp"
@@ -91,6 +93,26 @@ namespace generator
             }
         }
     };
+    struct Pinned32
+    {
+        float *p = nullptr;
+        size_t cap = 0;
+        ~Pinned32()
+        {
+            if (p)
+                cudaFreeHost(p);
+        }
+        void ensure(size_t n)
+        {
+            if (n > cap)
+            {
+                if (p)
+                    cudaFreeHost(p);
+                cudaHostAlloc(&p, n * sizeof(float), 0);
+                cap = n;
+            }
+        }
+    };
     // global ONNX Runtime environment (shared across all sessions)
     extern Ort::Env g_env;
 
@@ -130,6 +152,9 @@ namespace generator
 
     /**
      * @brief Engine for scoring prompts using the ONNX model
+     *
+     * Supports both one-hot (14 inputs) and clip_embed (13 inputs) models.
+     * Input layout is discovered dynamically from the ONNX model at init time.
      */
     class ScoringEngine
     {
@@ -138,8 +163,10 @@ namespace generator
          * @brief Constructs a new ScoringEngine instance
          * @param modelPath Path to the ONNX model file
          * @param threadId Thread ID for CUDA stream assignment
+         * @param deviceId CUDA device ID
          */
-        explicit ScoringEngine(const std::string &modelPath, int threadId = 0);
+        explicit ScoringEngine(const std::string &modelPath, int threadId = 0, int deviceId = 0,
+                               const std::string &clipCachePath = "");
 
         ~ScoringEngine();
 
@@ -156,25 +183,63 @@ namespace generator
          */
         void runBatch(const PromptBatch &batch);
 
+        static constexpr size_t MAX_INPUTS = 16;
+
     private:
         std::unique_ptr<Ort::Session> session_;
         Ort::MemoryInfo memory_info_;
         Ort::MemoryInfo memory_info_cuda_;
-        std::vector<const char *> input_names_;
+
+        // Dynamic input layout (discovered from ONNX model)
+        size_t numInputs_{0};
+        std::vector<std::string> input_names_owned_; // owns the strings
+        std::vector<const char *> input_names_;      // C-string pointers for ORT
         std::vector<const char *> output_names_;
+
+        // Name-to-index map for dispatch in copyBatchToDevice
+        std::unordered_map<std::string, size_t> inputNameToIndex_;
+
         std::unique_ptr<Ort::IoBinding> io_binding_;
         bool binding_needs_rebuild_ = true;
         cudaStream_t cuda_stream_;
+        bool owns_stream_{false};
         int thread_id_;
+        int device_id_;
+        std::string clip_cache_path_;
+        bool useCudaClipPooling_{false};
+        bool clipEmbeddingTableReady_{false};
+        size_t clipEmbeddingRows_{0};
+        size_t clipEmbeddingDim_{0};
+        std::string cudaClipPoolingFailureReason_;
 
-        // device buffers for the 13 inputs (fixed ordering following input_names_)
-        std::array<DeviceBuffer, 13> d_inputs_;
-        // ORT allocates outputs on device based on model infered dtype/shape
+        // device buffers for inputs (dynamic count)
+        std::array<DeviceBuffer, MAX_INPUTS> d_inputs_;
+        DeviceBuffer d_clip_embedding_table_;
+        DeviceBuffer d_clip_tag_ids_;
+        DeviceBuffer d_clip_tag_offsets_;
 
-        // pinned host staging buffers for FP16 inputs (reused every iteration)
-        std::array<Pinned16, 13> h_staging_fp16_;
+        // pinned host staging buffers for FP16 inputs
+        std::array<Pinned16, MAX_INPUTS> h_staging_fp16_;
+        // pinned host staging buffers for FP32 conversion from FP16 sources
+        std::array<Pinned32, MAX_INPUTS> h_staging_fp32_;
+        std::array<std::vector<int32_t>, MAX_INPUTS> h_staging_int32_;
         // expected input element types queried from the model
-        std::array<ONNXTensorElementDataType, 13> input_elem_types_{};
+        std::array<ONNXTensorElementDataType, MAX_INPUTS> input_elem_types_{};
+        cudaEvent_t outputReadyEvent_{nullptr};
+        bool metricsEnabled_{false};
+        std::chrono::milliseconds metricsLogInterval_{2000};
+        struct RuntimeMetrics
+        {
+            uint64_t batches{0};
+            uint64_t h2dCopyNs{0};
+            uint64_t sessionRunNs{0};
+            uint64_t d2hCopyNs{0};
+            uint64_t outputWaitNs{0};
+            uint64_t sigmoidNs{0};
+            uint64_t h2dBytes{0};
+            uint64_t d2hBytes{0};
+        } metrics_{};
+        std::chrono::steady_clock::time_point lastMetricsLog_{};
 
         /**
          * @brief Initializes the ONNX session
@@ -183,12 +248,15 @@ namespace generator
         void initSession(const std::string &modelPath);
 
         // alloc / resize device buffers to hold batch elements
-        void ensureDeviceCapacity(size_t batch);
+        void ensureDeviceCapacity(size_t batch, const PromptBatch &batchRef);
 
         // copy current batch from host vectors to device buffers
         void copyBatchToDevice(const PromptBatch &batch);
+        void initClipEmbeddingTableIfNeeded(const PromptBatch &batch);
+        bool tryRunCudaClipPooling(size_t clipInputIdx, const PromptBatch &batch);
+        void logMetricsIfNeeded();
 
-        // (re)bind inputs/outputs once when shapes change (shouldn't happen)
+        // (re)bind inputs/outputs once when shapes change
         void rebuildBindingIfNeeded();
     };
 
