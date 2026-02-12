@@ -5,6 +5,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -80,7 +81,10 @@ public:
     virtual ~Lora(void) {}
 
     // initialize precomputed tokens (should be called after construction)
-    void precompute_tokens(const generator::Tokenizer *tokenizer)
+    void precompute_tokens(
+        const generator::Tokenizer *tokenizer,
+        std::unordered_map<std::string, std::vector<int64_t>> *tagTokenCache = nullptr,
+        std::unordered_map<std::string, std::vector<int64_t>> *variationTokenCache = nullptr)
     {
         if (!tokenizer)
             return;
@@ -90,7 +94,24 @@ public:
         precomputed_tags_.reserve(tags_.size());
         for (const auto &tag : tags_)
         {
-            precomputed_tags_.push_back(tokenizer->precomputeTagTokens(tag));
+            if (tagTokenCache != nullptr)
+            {
+                auto cached = tagTokenCache->find(tag);
+                if (cached != tagTokenCache->end())
+                {
+                    precomputed_tags_.push_back(cached->second);
+                }
+                else
+                {
+                    std::vector<int64_t> computed = tokenizer->precomputeTagTokens(tag);
+                    tagTokenCache->emplace(tag, computed);
+                    precomputed_tags_.push_back(std::move(computed));
+                }
+            }
+            else
+            {
+                precomputed_tags_.push_back(tokenizer->precomputeTagTokens(tag));
+            }
         }
 
         // precompute variations
@@ -98,7 +119,24 @@ public:
         precomputed_variations_.reserve(variations_.size());
         for (const auto &variation : variations_)
         {
-            precomputed_variations_.push_back(tokenizer->precomputeTagTokens(variation));
+            if (variationTokenCache != nullptr)
+            {
+                auto cached = variationTokenCache->find(variation);
+                if (cached != variationTokenCache->end())
+                {
+                    precomputed_variations_.push_back(cached->second);
+                }
+                else
+                {
+                    std::vector<int64_t> computed = tokenizer->precomputeTagTokens(variation);
+                    variationTokenCache->emplace(variation, computed);
+                    precomputed_variations_.push_back(std::move(computed));
+                }
+            }
+            else
+            {
+                precomputed_variations_.push_back(tokenizer->precomputeTagTokens(variation));
+            }
         }
 
         std::string lora_tag_str = "<" + prefix_tag_ + ":" + lora_tag_ + ":" + std::to_string(get_weight()) + ">";
@@ -138,6 +176,7 @@ public:
     std::string get_lora_tag(void) const { return lora_tag_; }
     Lora::LORA_TYPE get_type(void) const { return type_; }
     std::string get_prefix_tag(void) const { return prefix_tag_; }
+    std::optional<std::pair<int64_t, float>> get_precomputed_lora_token(void) const { return precomputed_lora_token_; }
 
     virtual std::vector<std::string>
     remove_banned_tags(std::vector<std::string> tags)
@@ -180,26 +219,41 @@ public:
     }
 
     // get precomputed tokens and LoRA info
-    virtual std::pair<std::vector<std::vector<int64_t>>, std::vector<std::pair<int64_t, float>>> get_precomputed_tokens(void) const
+    virtual void append_precomputed_tokens(std::vector<const std::vector<int64_t> *> &token_vector_refs,
+                                           std::vector<std::pair<int64_t, float>> &lora_tokens) const
     {
-        std::vector<std::vector<int64_t>> token_vectors;
-        std::vector<std::pair<int64_t, float>> lora_tokens;
-
-        // ddd LoRA token
         if (precomputed_lora_token_)
         {
             lora_tokens.push_back(*precomputed_lora_token_);
         }
 
-        // add regular tag tokens
-        token_vectors.insert(token_vectors.end(), precomputed_tags_.begin(), precomputed_tags_.end());
+        for (const auto &tokenVec : precomputed_tags_)
+        {
+            token_vector_refs.push_back(&tokenVec);
+        }
 
-        // add variation tokens based on random chance
         for (size_t i = 0; i < precomputed_variations_.size(); ++i)
         {
             if (rng::chance(VARIATION_THRESHOLD))
             {
-                token_vectors.push_back(precomputed_variations_[i]);
+                token_vector_refs.push_back(&precomputed_variations_[i]);
+            }
+        }
+    }
+
+    virtual std::pair<std::vector<std::vector<int64_t>>, std::vector<std::pair<int64_t, float>>> get_precomputed_tokens(void) const
+    {
+        std::vector<std::vector<int64_t>> token_vectors;
+        std::vector<std::pair<int64_t, float>> lora_tokens;
+        std::vector<const std::vector<int64_t> *> token_refs;
+        token_refs.reserve(precomputed_tags_.size() + precomputed_variations_.size());
+        append_precomputed_tokens(token_refs, lora_tokens);
+        token_vectors.reserve(token_refs.size());
+        for (const auto *tokenVecPtr : token_refs)
+        {
+            if (tokenVecPtr != nullptr)
+            {
+                token_vectors.push_back(*tokenVecPtr);
             }
         }
 
@@ -241,30 +295,26 @@ public:
         return tags;
     }
 
-    virtual std::pair<std::vector<std::vector<int64_t>>, std::vector<std::pair<int64_t, float>>> get_precomputed_tokens(void) const override
+    virtual void append_precomputed_tokens(std::vector<const std::vector<int64_t> *> &token_vector_refs,
+                                           std::vector<std::pair<int64_t, float>> &lora_tokens) const override
     {
-        std::vector<std::vector<int64_t>> token_vectors;
-        std::vector<std::pair<int64_t, float>> lora_tokens;
-
         bool force_ban = rng::chance(VARIATION_THRESHOLD) && precomputed_variations_.size() > 0;
 
-        // Add LoRA token
         if (precomputed_lora_token_)
         {
             lora_tokens.push_back(*precomputed_lora_token_);
         }
 
-        // Add regular tag tokens
-        token_vectors.insert(token_vectors.end(), precomputed_tags_.begin(), precomputed_tags_.end());
+        for (const auto &tokenVec : precomputed_tags_)
+        {
+            token_vector_refs.push_back(&tokenVec);
+        }
 
         if (!force_ban)
-            return {token_vectors, lora_tokens};
+            return;
 
-        // Add one random variation
         size_t variation_idx = rng::irange(0, precomputed_variations_.size() - 1);
-        token_vectors.push_back(precomputed_variations_[variation_idx]);
-
-        return {token_vectors, lora_tokens};
+        token_vector_refs.push_back(&precomputed_variations_[variation_idx]);
     }
 
     void register_extra_banned(std::vector<std::string> categories)

@@ -25,6 +25,8 @@ class Lora_controller
     std::unordered_map<std::string, TagLora *> tag_lora_map_;
     std::unordered_map<Lora *, std::vector<SecondaryLora *>> main_compatibility_map_;
     std::unordered_map<SecondaryLora *, std::vector<Lora *>> secondary_compatibility_map_;
+    std::unordered_map<std::string, std::vector<int64_t>> tag_precompute_cache_;
+    std::unordered_map<std::string, std::vector<int64_t>> variation_precompute_cache_;
 
     size_t size_;
 
@@ -57,6 +59,9 @@ public:
             delete ptr;
     }
 
+    // Default constructor for models without LoRAs
+    Lora_controller() : size_(0) {}
+
     Lora_controller(
         std::vector<MainLora *> mains, std::vector<SecondaryLora *> secondaries,
         std::vector<ConditionalVariantLora *> conditionals,
@@ -88,20 +93,117 @@ public:
             a.second->reroll(); // multiple rerolls per TagLora
     }
 
+    std::unordered_map<int64_t, Lora *> id_to_lora_map_;
+
     // initialize precomputed tokens for all LoRAs
     void precompute_all_tokens(const generator::Tokenizer *tokenizer)
     {
         if (!tokenizer)
             return;
 
+        id_to_lora_map_.clear();
+
+        auto process = [&](Lora *lora)
+        {
+            lora->precompute_tokens(
+                tokenizer,
+                &tag_precompute_cache_,
+                &variation_precompute_cache_);
+            std::optional<std::pair<int64_t, float>> loraToken = lora->get_precomputed_lora_token();
+            if (loraToken.has_value())
+            {
+                id_to_lora_map_[loraToken->first] = lora;
+            }
+        };
+
         for (auto *lora : mains_)
-            lora->precompute_tokens(tokenizer);
+            process(lora);
         for (auto *lora : secondaries_)
-            lora->precompute_tokens(tokenizer);
+            process(lora);
         for (auto *lora : conditionals_)
-            lora->precompute_tokens(tokenizer);
+            process(lora);
         for (auto &pair : tag_lora_map_)
-            pair.second->precompute_tokens(tokenizer);
+            process(pair.second);
+    }
+
+    size_t get_tag_precompute_cache_size(void) const
+    {
+        return tag_precompute_cache_.size();
+    }
+
+    size_t get_variation_precompute_cache_size(void) const
+    {
+        return variation_precompute_cache_.size();
+    }
+
+    std::vector<int64_t> sanitize_loras(const std::vector<int64_t> &input_ids)
+    {
+        std::vector<int64_t> result;
+        Lora *selected_main = nullptr;
+
+        // 1. Identify Main LoRA
+        for (int64_t id : input_ids)
+        {
+            if (id_to_lora_map_.count(id))
+            {
+                Lora *l = id_to_lora_map_[id];
+                if (l->get_type() == Lora::MAIN)
+                {
+                    if (!selected_main)
+                    {
+                        selected_main = l;
+                        result.push_back(id);
+                    }
+                }
+            }
+        }
+
+        // 2. Filter Secondaries/Conditionals based on Main
+        for (int64_t id : input_ids)
+        {
+            if (id_to_lora_map_.count(id))
+            {
+                Lora *l = id_to_lora_map_[id];
+                if (l->get_type() == Lora::MAIN)
+                    continue; // Already handled
+
+                bool allowed = true;
+                if (selected_main && l->get_type() == Lora::SECONDARY)
+                {
+                    const auto &compatible = main_compatibility_map_[selected_main];
+                    bool found = false;
+                    for (auto *sec : compatible)
+                    {
+                        if (sec == l)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                        allowed = false;
+                }
+
+                if (allowed)
+                {
+                    result.push_back(id);
+                }
+            }
+            else
+            {
+                // Keep unknown IDs (e.g. synthetic tag IDs)
+                result.push_back(id);
+            }
+        }
+        return result;
+    }
+
+    const Lora *get_lora_by_id(int64_t id) const
+    {
+        auto it = id_to_lora_map_.find(id);
+        if (it != id_to_lora_map_.end())
+            return it->second;
+        return nullptr;
     }
 
     const Lora *get_lora_by_name(const std::string &name) const
