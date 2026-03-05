@@ -13,6 +13,7 @@
 // forward declarations
 class Tag_dict;
 std::shared_ptr<Tag_dict> create_tag_dict(const std::string &json_path);
+std::shared_ptr<Tag_dict> create_tag_dict_int(const std::string &json_path);
 
 struct Node
 {
@@ -41,6 +42,8 @@ struct MapNode : Node
 struct Rules
 {
     std::vector<std::string> unique_categories;
+    std::vector<std::string> filter_categories;
+    bool has_filter_categories{false};
     std::unordered_map<std::string, std::vector<std::vector<std::string>>> exclusive_groups; // group name -> array of category arrays (mutually exclusive arrays)
     std::unordered_map<std::string, std::vector<std::string>> incompatible_categories;       // category -> categories it cannot co-exist with
 };
@@ -75,9 +78,28 @@ class Tag_dict
     CategoryRegistry registry_;
 
 public:
+    // Default constructor for creating uninitialized instances
+    Tag_dict() = default;
+
     explicit Tag_dict(std::shared_ptr<Node> root) : rootNode(std::move(root)) {}
     Tag_dict(std::shared_ptr<Node> root, Rules rules, CategoryRegistry registry)
         : rootNode(std::move(root)), rules_(std::move(rules)), registry_(std::move(registry)) {}
+
+    /**
+     * @brief Loads tag dictionary from JSON into this instance (non-static)
+     * @param path Path to the JSON file
+     * @return true if loading succeeded
+     */
+    bool loadFromJsonInstance(const std::string &path)
+    {
+        std::shared_ptr<Tag_dict> tg = create_tag_dict(path);
+        if (tg == nullptr)
+            return false;
+        rootNode = std::move(tg->rootNode);
+        rules_ = std::move(tg->rules_);
+        registry_ = std::move(tg->registry_);
+        return true;
+    }
 
     static bool loadFromJson(const std::string &path)
     {
@@ -87,6 +109,20 @@ public:
             return true;
         }
         std::shared_ptr<Tag_dict> tg = create_tag_dict(path);
+        if (tg == nullptr)
+            return false;
+        s_instance_ = std::move(tg);
+        return true;
+    }
+
+    static bool loadFromIntJson(const std::string &path)
+    {
+        if (s_instance_ != nullptr)
+        {
+            std::cerr << "Tag dict already initialized" << std::endl;
+            return true;
+        }
+        std::shared_ptr<Tag_dict> tg = create_tag_dict_int(path);
         if (tg == nullptr)
             return false;
         s_instance_ = std::move(tg);
@@ -120,7 +156,20 @@ public:
 
     std::vector<std::string> getListNode(const std::string &path) const
     {
-        return std::dynamic_pointer_cast<ListNode>(getNode(path))->values;
+        auto node = getNode(path);
+        if (!node)
+            return {};
+        if (auto listNode = std::dynamic_pointer_cast<ListNode>(node))
+            return listNode->values;
+        if (auto stringNode = std::dynamic_pointer_cast<StringNode>(node))
+            return {stringNode->value};
+        if (std::dynamic_pointer_cast<MapNode>(node))
+        {
+            std::vector<std::string> result;
+            flattenNode(node, result);
+            return result;
+        }
+        return {};
     }
 
     void flattenNode(const std::shared_ptr<Node> &node, std::vector<std::string> &result) const

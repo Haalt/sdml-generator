@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 
@@ -7,9 +8,36 @@
 
 namespace generator
 {
+    /**
+     * @brief Strips opening and closing parentheses from a string
+     * @param str The input string
+     * @param shouldStrip Whether to actually strip (runtime flag)
+     * @return String with all '(' and ')' characters removed, or original if shouldStrip is false
+     */
+    inline std::string stripParenthesesImpl(const std::string &str, bool shouldStrip)
+    {
+        if (!shouldStrip)
+        {
+            return str;
+        }
+        if (str.rfind("lora ", 0) == 0)
+        {
+            return str;
+        }
+        std::string result;
+        result.reserve(str.size());
+        for (char c : str)
+        {
+            if (c != '(' && c != ')')
+            {
+                result.push_back(c);
+            }
+        }
+        return result;
+    }
 
-    Tokenizer::Tokenizer(const std::string &tokenizerPath, char delimiter)
-        : delimiter_(delimiter)
+    Tokenizer::Tokenizer(const std::string &tokenizerPath, char delimiter, bool stripParentheses)
+        : delimiter_(delimiter), stripParentheses_(stripParentheses)
     {
         std::ifstream file(tokenizerPath);
         if (!file.is_open())
@@ -93,13 +121,22 @@ namespace generator
                         result.loras.push_back(tokenToLoraToken(wordIt->second));
                         ++result.numLoras;
                     }
+                    else if (wordIt == wordIndex_.end())
+                    {
+                        std::cerr << "Tokenizer: unknown LoRA token '" << token << "' parsed from '" << tokenStr << "'" << std::endl;
+                    }
                 }
                 else
                 {
-                    auto it = wordIndex_.find(tokenStr);
+                    std::string normalizedToken = stripParenthesesImpl(tokenStr, stripParentheses_);
+                    auto it = wordIndex_.find(normalizedToken);
                     if (it != wordIndex_.end() && result.tokens.size() < MAX_SEQUENCE_LENGTH)
                     {
                         result.tokens.push_back(it->second);
+                    }
+                    else if (it == wordIndex_.end())
+                    {
+                        std::cerr << "Tokenizer: unknown tag '" << tokenStr << "'" << std::endl;
                     }
                 }
                 continue; // done with this tag
@@ -136,13 +173,22 @@ namespace generator
                         result.loras.push_back(tokenToLoraToken(wordIt->second));
                         ++result.numLoras;
                     }
+                    else if (wordIt == wordIndex_.end())
+                    {
+                        std::cerr << "Tokenizer: unknown LoRA token '" << token << "' parsed from '" << tokenStr << "'" << std::endl;
+                    }
                 }
                 else
                 {
-                    auto it = wordIndex_.find(tokenStr);
+                    std::string normalizedToken = stripParenthesesImpl(tokenStr, stripParentheses_);
+                    auto it = wordIndex_.find(normalizedToken);
                     if (it != wordIndex_.end() && result.tokens.size() < MAX_SEQUENCE_LENGTH)
                     {
                         result.tokens.push_back(it->second);
+                    }
+                    else if (it == wordIndex_.end())
+                    {
+                        std::cerr << "Tokenizer: unknown tag '" << tokenStr << "'" << std::endl;
                     }
                 }
             }
@@ -202,13 +248,13 @@ namespace generator
         return loraIndex_.at(invertedMap_.at(token));
     }
 
-    std::vector<std::string> Tokenizer::splitPrompt(const std::string &prompt) const
+    std::vector<std::string> Tokenizer::splitTagString(const std::string &tag, char delimiter)
     {
         std::vector<std::string> tokens;
-        std::stringstream ss(prompt);
+        std::stringstream ss(tag);
         std::string token;
 
-        while (std::getline(ss, token, delimiter_))
+        while (std::getline(ss, token, delimiter))
         {
             // trim whitespaces
             token.erase(0, token.find_first_not_of(" \t\r\n"));
@@ -221,6 +267,11 @@ namespace generator
         }
 
         return tokens;
+    }
+
+    std::vector<std::string> Tokenizer::splitPrompt(const std::string &prompt) const
+    {
+        return splitTagString(prompt, delimiter_);
     }
 
     std::pair<std::string, float> Tokenizer::parseLoraTag(const std::string &tag) const
@@ -281,10 +332,15 @@ namespace generator
         // fast path: most tags have no delimiter: process directly
         if (tag.find(delimiter_) == std::string::npos)
         {
-            auto it = wordIndex_.find(tag);
+            std::string normalizedTag = stripParenthesesImpl(tag, stripParentheses_);
+            auto it = wordIndex_.find(normalizedTag);
             if (it != wordIndex_.end())
             {
                 result.push_back(it->second);
+            }
+            else
+            {
+                std::cerr << "Tokenizer: unknown tag '" << tag << "'" << std::endl;
             }
             return result;
         }
@@ -295,10 +351,15 @@ namespace generator
 
         for (const auto &tokenStr : tokens)
         {
-            auto it = wordIndex_.find(tokenStr);
+            std::string normalizedToken = stripParenthesesImpl(tokenStr, stripParentheses_);
+            auto it = wordIndex_.find(normalizedToken);
             if (it != wordIndex_.end())
             {
                 result.push_back(it->second);
+            }
+            else
+            {
+                std::cerr << "Tokenizer: unknown tag '" << tokenStr << "'" << std::endl;
             }
         }
 
@@ -318,10 +379,25 @@ namespace generator
             return std::make_pair(loraTokenId, weight);
         }
 
+        std::cerr << "Tokenizer: unknown LoRA token '" << token << "' parsed from '" << loraTag << "'" << std::endl;
+
         return std::nullopt;
     }
 
     Prompt Tokenizer::assemblePrompt(const std::vector<std::vector<int64_t>> &tokenVectors,
+                                     const std::vector<std::pair<int64_t, float>> &loraTokens,
+                                     float cfgScale) const
+    {
+        std::vector<const std::vector<int64_t> *> tokenVectorRefs;
+        tokenVectorRefs.reserve(tokenVectors.size());
+        for (const auto &tokenVec : tokenVectors)
+        {
+            tokenVectorRefs.push_back(&tokenVec);
+        }
+        return assemblePrompt(tokenVectorRefs, loraTokens, cfgScale);
+    }
+
+    Prompt Tokenizer::assemblePrompt(const std::vector<const std::vector<int64_t> *> &tokenVectorRefs,
                                      const std::vector<std::pair<int64_t, float>> &loraTokens,
                                      float cfgScale) const
     {
@@ -333,8 +409,13 @@ namespace generator
         result.weights.reserve(MAX_LORAS);
 
         // Assemble regular tokens
-        for (const auto &tokenVec : tokenVectors)
+        for (const auto *tokenVecPtr : tokenVectorRefs)
         {
+            if (tokenVecPtr == nullptr)
+            {
+                continue;
+            }
+            const std::vector<int64_t> &tokenVec = *tokenVecPtr;
             if (result.tokens.size() >= MAX_SEQUENCE_LENGTH)
                 break;
 

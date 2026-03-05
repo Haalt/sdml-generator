@@ -21,12 +21,15 @@ namespace generator
     class Tokenizer
     {
     public:
+        static std::vector<std::string> splitTagString(const std::string &tag, char delimiter = ',');
+
         /**
          * @brief Constructs a new Tokenizer instance
          * @param tokenizerPath Path to the tokenizer configuration file
          * @param delimiter Character used to split tokens in prompts
+         * @param stripParentheses Whether to strip parentheses from tags before tokenization
          */
-        explicit Tokenizer(const std::string &tokenizerPath, char delimiter = ',');
+        explicit Tokenizer(const std::string &tokenizerPath, char delimiter = ',', bool stripParentheses = true);
 
         /**
          * @brief Processes a prompt string into tokens
@@ -130,9 +133,13 @@ namespace generator
         Prompt assemblePrompt(const std::vector<std::vector<int64_t>> &tokenVectors,
                               const std::vector<std::pair<int64_t, float>> &loraTokens,
                               float cfgScale) const;
+        Prompt assemblePrompt(const std::vector<const std::vector<int64_t> *> &tokenVectorRefs,
+                              const std::vector<std::pair<int64_t, float>> &loraTokens,
+                              float cfgScale) const;
 
     private:
         char delimiter_;
+        bool stripParentheses_;
         std::unordered_map<std::string, int64_t> wordIndex_;
         std::unordered_map<std::string, int64_t> loraIndex_;
         std::unordered_map<std::string, int64_t> samplerIndex_;
