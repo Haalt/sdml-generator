@@ -5,68 +5,95 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
+#include "config/model_profile.hpp"
 #include "evaluation/filtering_thread.hpp"
 #include "evaluation/scoring_thread.hpp"
+#include "generator/generator.h"
 #include "models/Lora_controller.h"
 #include "models/Tag_list.h"
-#include "tokenizer/Tokenizer.hpp"
+#include "models/clip_embed_cache.hpp"
+#include "tokenizer/tokenizer.hpp"
 #include "utils/types.hpp"
 
 namespace generator
 {
-
-    struct GeneratorConfig
+    /**
+     * @brief Runtime configuration for the generator thread pool
+     *
+     * Contains threading parameters that are not part of the models config.
+     */
+    struct GeneratorRuntimeConfig
     {
-        std::string modelPath;           // Path to ONNX model
-        std::string tokenizerPath;       // Path to tokenizer file for scoring
-        std::string lorasJsonPath;       // Path to LoRAs JSON file
-        std::string generatorConfigPath; // Path to generator config JSON
-        float scoreThreshold = 0.8f;     // Minimum score to keep a prompt
-        int numGeneratorThreads = 4;     // Number of generator threads to use
+        int numGeneratorThreads = 0; // 0 -> auto (based on CPU cores)
+        int numGpus = 0;             // 0 -> auto (cudaGetDeviceCount)
+        int numScoringThreads = 0;   // 0 -> auto (balanced per GPU)
+        int loraCap = 5;             // Maximum prompts per LoRA in filtering
+        int profileBurstSize = 0;    // 0 -> auto (favor homogeneous scoring batches)
     };
 
     class GeneratorThread
     {
     public:
-        GeneratorThread(GeneratorConfig config);
+        /**
+         * @brief Constructs a GeneratorThread with multi-model support
+         * @param modelsConfig Configuration containing all model profiles
+         * @param runtimeConfig Runtime threading parameters
+         */
+        GeneratorThread(const ModelsConfig &modelsConfig, GeneratorRuntimeConfig runtimeConfig = {});
         ~GeneratorThread();
 
         void stopAndJoin();
 
-        // get processed prompts that meet the threshold and filtering rules
+        // Get processed prompts that meet the threshold and filtering rules (aggregated from all models)
         std::vector<ScoredPrompt> getFilteredPrompts();
         size_t getFilteredPromptsSize(void) const;
 
+        // Get filtered prompts for a specific profile
+        std::vector<ScoredPrompt> getFilteredPromptsForProfile(int32_t profileId);
+
         std::vector<std::string> formatPrompts(const std::vector<ScoredPrompt> &prompts) const;
 
+        // Get the models configuration
+        const ModelsConfig &getModelsConfig() const { return modelsConfig_; }
+
     private:
-        // worker thread function for generation
+        // Worker thread function for generation
         void generatorThreadFunction(int threadId);
 
-        // initialization of your actual generator components
-        bool initGeneratorComponents(int threadId);
+        // Initialization of generator components for a specific profile
+        bool initProfileComponents(int32_t profileId);
 
         std::vector<std::thread> generatorThreads_;
         std::atomic<bool> running_{true};
 
-        // scoring thread pool for model-based filtering
+        // Scoring thread pool for model-based filtering (shared across all models)
         std::unique_ptr<ScoringThreadPool> scoringThreadPool_;
 
-        std::unique_ptr<FilteringThread> filteringThread_;
+        // Per-profile filtering threads (key: profileId)
+        std::unordered_map<int32_t, std::unique_ptr<FilteringThread>> filteringThreads_;
 
-        GeneratorConfig config_;
+        ModelsConfig modelsConfig_;
+        GeneratorRuntimeConfig runtimeConfig_;
 
-        // thread local generator components
-        struct GeneratorComponents
+        // Per-profile generator components (key: profileId)
+        struct ProfileComponents
         {
             std::unique_ptr<Lora_controller> loraController;
             std::unique_ptr<Tag_list> tagList;
             std::unique_ptr<Tokenizer> tokenizer;
+            std::shared_ptr<Tag_dict> tagDict;
+            std::unique_ptr<ClipEmbedCache> clipEmbedCache; // Non-null for clip_embed models
+            GeneratorModelSettings modelSettings;
+            std::string generatorConfigPath;
         };
-        std::vector<std::unique_ptr<GeneratorComponents>> generatorComponents_;
+        std::unordered_map<int32_t, std::unique_ptr<ProfileComponents>> profileComponents_;
         std::mutex componentsMutex_;
+
+        // List of profile IDs for round-robin iteration
+        std::vector<int32_t> profileIds_;
     };
 
 } // namespace generator
