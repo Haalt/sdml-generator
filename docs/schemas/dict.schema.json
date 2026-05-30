@@ -48,6 +48,15 @@
           },
           "uniqueItems": true
         },
+        "filter_categories": {
+          "description": "Optional categories used for tag-as-LoRA filtering; falls back to unique_categories when absent",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Category path (e.g., 'characters' or 'style.anime')"
+          },
+          "uniqueItems": true
+        },
         "exclusive_groups": {
           "description": "Named groups of category arrays that are mutually exclusive",
           "type": "object",
@@ -122,6 +131,9 @@
       },
       "rules": {
         "unique_categories": [
+          "characters"
+        ],
+        "filter_categories": [
           "characters"
         ],
         "exclusive_groups": {

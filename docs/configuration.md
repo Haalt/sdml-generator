@@ -8,6 +8,58 @@ The SDML Generator uses three main JSON configuration files to define how prompt
 - **`loras.json`**: LoRA/LyCORIS model definitions, weights, and compatibility matrix
 - **`generator_config.json`**: Technical generation settings (samplers, dimensions, etc.)
 
+## Models Configuration (`models_config.json`)
+
+The runtime profile config now separates generation behavior from scoring representation on a per-profile basis.
+
+```json
+{
+  "tokenizer": "tokenizer.json",
+  "profiles": [
+    {
+      "id": 0,
+      "name": "sd15",
+      "model_type": "one-hot",
+      "generation_mode": "expert_dict",
+      "dict": "dicts/sd15.json",
+      "loras": "loras/sd15.json",
+      "generator_config": "configs/sd15.json",
+      "use_loras": true
+    },
+    {
+      "id": 1,
+      "name": "sdxl_clip_expert",
+      "model_type": "clip_embed",
+      "generation_mode": "expert_dict",
+      "dict": "dicts/sdxl.json",
+      "clip_cache": "clip/cache.bin",
+      "generator_config": "configs/sdxl.json",
+      "use_loras": false,
+      "use_tags_as_loras": true
+    }
+  ]
+}
+```
+
+### Profile Fields
+
+- **`model_type`**: Chooses the scorer input representation. Supported values are `one-hot` and `clip_embed`.
+- **`generation_mode`**: Chooses how prompts are generated. Supported values are `expert_dict` and `clip_random_vocab`.
+- **`dict`**: Required when `generation_mode` is `expert_dict`.
+- **`clip_cache`**: Required when `model_type` is `clip_embed`.
+- **`tag_vocab`**: Optional when `model_type` is `clip_embed`. If omitted, the cache row names are used as the CLIP vocabulary.
+
+### Supported Combinations
+
+- **`one-hot` + `expert_dict`**: Existing full expert-system generation with token-based scoring.
+- **`clip_embed` + `clip_random_vocab`**: Existing flat-vocab CLIP sampling path.
+- **`clip_embed` + `expert_dict`**: Expert-system generation with CLIP scoring. Dict tags are validated against the CLIP vocab at startup, and CLIP tag IDs are precomputed before the hot path starts.
+
+If `generation_mode` is omitted, the default remains backward compatible:
+
+- **`one-hot`** defaults to **`expert_dict`**
+- **`clip_embed`** defaults to **`clip_random_vocab`**
+
 ## Tag Dictionary (`dict.json`)
 
 **Purpose**: Defines the vocabulary and rules for tag-based prompt generation.
@@ -24,6 +76,7 @@ The SDML Generator uses three main JSON configuration files to define how prompt
   },
   "rules": {
     "unique_categories": ["category_name"],
+    "filter_categories": ["category_name"],
     "exclusive_groups": {
       "group_name": ["category1", "category2"]
     },
@@ -71,6 +124,16 @@ Categories where only one tag can be selected per generation:
 ```json
 "unique_categories": ["characters", "background"]
 ```
+
+#### Filter Categories
+
+Optional categories used for tag-as-LoRA diversity filtering when `use_tags_as_loras` is enabled:
+
+```json
+"filter_categories": ["characters", "clothes.clothing"]
+```
+
+If omitted, filtering falls back to `unique_categories` for backward compatibility. If present as an empty list, no dictionary categories participate in tag-as-LoRA filtering.
 
 #### Exclusive Groups
 
@@ -308,6 +371,7 @@ The generator uses this to:
   "n_iter": 8,
   "batch_size": 1,
   "hr_scale": 2,
+  "prompt_extra_settings": "--hr_resize_x 1024 --hr_resize_y 1024",
   "positive_prompt": "masterpiece, best quality",
   "negative_prompt": "lowres, bad anatomy",
   "vanilla_extra_tags": ["focus"]
@@ -358,12 +422,20 @@ Defaults to `["None"]` if not specified.
 
 - **`n_iter`**: Number of iterations/images (default: 8)
 - **`batch_size`**: Batch size for generation (default: 1)
-- **`hr_scale`**: High-resolution scale factor (default: 2)
+- **`hr_scale`**: High-resolution scale factor (default: 2). Accepts positive integers or floating point values greater than 0.
 
 #### Prompt Templates
 
 - **`positive_prompt`**: Base positive prompt prepended to all generated prompts
 - **`negative_prompt`**: Base negative prompt used for all generations
+
+#### Prompt Extra Settings
+
+Optional string appended verbatim to every generated CLI prompt. Useful for Stable Diffusion WebUI flags such as high-resolution resize dimensions.
+
+```json
+"prompt_extra_settings": "--hr_resize_x 1024 --hr_resize_y 1024"
+```
 
 #### Vanilla Extra Tags
 
